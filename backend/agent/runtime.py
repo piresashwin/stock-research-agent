@@ -37,7 +37,7 @@ class AgentRuntime:
         except Exception as e:
             self.db.rollback()
 
-    def run_stream(self, prompt: str, max_iterations: int = 8) -> Generator[str, None, str]:
+    def run_stream(self, prompt: str, max_iterations: int = 8, enable_tools: bool = True) -> Generator[str, None, str]:
         """
         Execute streaming tool-augmented conversation cycle yielding JSON/SSE message events.
         Returns the final consolidated text output string.
@@ -53,12 +53,15 @@ class AgentRuntime:
             yield json.dumps({"type": "status", "content": f"Cycle {iteration}/{max_iterations} execution started..."})
             
             try:
-                response_stream = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=self.messages,
-                    tools=get_tool_schemas(),
-                    stream=True
-                )
+                create_kwargs = {
+                    "model": self.model,
+                    "messages": self.messages,
+                    "stream": True
+                }
+                if enable_tools and get_tool_schemas():
+                    create_kwargs["tools"] = get_tool_schemas()
+                
+                response_stream = self.client.chat.completions.create(**create_kwargs)
             except Exception as e:
                 err_msg = f"LLM Server connection exception: {str(e)}"
                 self._append_log("error", err_msg)

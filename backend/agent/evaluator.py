@@ -66,21 +66,19 @@ INSTRUCTIONS:
     prompt = f"Analyze the gathered parameters for {symbol} against the framework checklist and generate the definitive JSON structured verdict payload."
     
     final_verdict_str = ""
-    for chunk in runtime.run_stream(prompt=prompt, max_iterations=4):
+    for chunk in runtime.run_stream(prompt=prompt, max_iterations=2, enable_tools=False):
         yield chunk
 
-    # Intercept raw returned string to isolate pure JSON payload
-    raw_content = runtime.messages[-1].get("content", "") if runtime.messages else "{}"
+    # Intercept final assistant reasoning message containing content strings safely
+    assistant_msgs = [m for m in runtime.messages if m.get("role") == "assistant" and m.get("content")]
+    raw_content = assistant_msgs[-1].get("content", "") if assistant_msgs else "{}"
     
-    # Strip any potential markdown blocks embedded by local models
+    # Strip conversational text preambles to isolate target block securely between outer curly braces
     cleaned_json_str = raw_content.strip()
-    if cleaned_json_str.startswith("```json"):
-        cleaned_json_str = cleaned_json_str[7:]
-    if cleaned_json_str.startswith("```"):
-        cleaned_json_str = cleaned_json_str[3:]
-    if cleaned_json_str.endswith("```"):
-        cleaned_json_str = cleaned_json_str[:-3]
-    cleaned_json_str = cleaned_json_str.strip()
+    start_idx = cleaned_json_str.find("{")
+    end_idx = cleaned_json_str.rfind("}")
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        cleaned_json_str = cleaned_json_str[start_idx:end_idx+1]
 
     # Validate JSON compilation string schema structure
     try:

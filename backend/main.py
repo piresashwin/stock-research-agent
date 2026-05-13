@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.models import Base, StockResearchJob, ResearchLog
-from backend.database import engine, get_db
+from backend.database import engine, get_db, SessionLocal
 from backend.agent.researcher import gather_stock_data
 from backend.agent.evaluator import evaluate_stock_verdict
 
@@ -28,6 +28,7 @@ app.add_middleware(
 
 class ResearchRequest(BaseModel):
     symbol: str
+    run_background: Optional[bool] = False
 
 class JobResponse(BaseModel):
     id: int
@@ -36,8 +37,28 @@ class JobResponse(BaseModel):
     gathered_data: Optional[str] = None
     verdict_json: Optional[str] = None
 
+def run_research_in_background(job_id: int, symbol: str):
+    """Executes full agentic collection and scoring lifecycle sequentially inside isolated background workers."""
+    print(f"🚀 Spawning isolated background worker queue for target ticker: {symbol} (Job ID: {job_id})", flush=True)
+    db = SessionLocal()
+    try:
+        for _ in gather_stock_data(job_id=job_id, symbol=symbol, db=db):
+            pass
+        print(f"✅ Phase 1 gathering finalized for {symbol}. Initializing Phase 2 evaluation...", flush=True)
+        for _ in evaluate_stock_verdict(job_id=job_id, symbol=symbol, db=db):
+            pass
+        print(f"🎉 Fully completed deep research task execution for {symbol}!", flush=True)
+    except Exception as e:
+        print(f"❌ Background worker task exception encountered for {symbol}: {str(e)}", flush=True)
+        job = db.query(StockResearchJob).filter(StockResearchJob.id == job_id).first()
+        if job:
+            job.status = "failed"
+            db.commit()
+    finally:
+        db.close()
+
 @app.post("/api/research", response_model=JobResponse)
-def trigger_research_job(req: ResearchRequest, db: Session = Depends(get_db)):
+def trigger_research_job(req: ResearchRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Initialize a deep research session tracker row for a targeted stock ticker symbol."""
     symbol_upper = req.symbol.strip().upper()
     if not symbol_upper:
@@ -59,6 +80,10 @@ def trigger_research_job(req: ResearchRequest, db: Session = Depends(get_db)):
             db.query(ResearchLog).filter(ResearchLog.job_id == job.id).delete()
             db.commit()
             db.refresh(job)
+            
+    # Trigger isolated execution lifecycle if requested specifically by client configuration
+    if req.run_background:
+        background_tasks.add_task(run_research_in_background, job.id, symbol_upper)
             
     return job
 

@@ -17,7 +17,7 @@ services:
       - OPENAI_BASE_URL=http://host.docker.internal:1234/v1
       - OPENAI_API_KEY=lm-studio
       - HEADLESS_BROWSER=True
-      - MODEL_NAME=google/gemma-4-e2b
+      - MODEL_NAME=qwen/qwen3.5-9b
     # Install Python requirements and boot the live-reloading FastAPI server on startup
     command: sh -c "pip install --no-cache-dir -r backend/requirements.txt && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend"
     restart: unless-stopped
@@ -35,4 +35,16 @@ services:
       - VITE_API_BASE_URL=http://localhost:8000
     # Install Node packages dynamically and launch Vite live server
     command: sh -c "npm install && npm run dev"
+    restart: unless-stopped
+
+  whatsapp:
+    image: node:20-slim
+    working_dir: /app/whatsapp-bot
+    volumes:
+      - .:/app
+    environment:
+      - API_BASE_URL=http://backend:8000
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    # Dynamically inject underlying Chromium system packages required by local headless client instances
+    command: sh -c "apt-get update && apt-get install -y chromium && npm install && npm start"
     restart: unless-stopped
