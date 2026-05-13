@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    # Use official Playwright image directly as the runtime execution environment
+    image: mcr.microsoft.com/playwright/python:v1.42.0-jammy
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      # Inject local workspace files directly into the container execution environment
+      - .:/app
+    environment:
+      - APP_NAME=Stock Deep Research Agent API
+      - DATABASE_URL=sqlite:///./research_agent.db
+      # host.docker.internal routes connection to LM Studio running on host OS
+      - OPENAI_BASE_URL=http://host.docker.internal:1234/v1
+      - OPENAI_API_KEY=lm-studio
+      - HEADLESS_BROWSER=True
+      - MODEL_NAME=google/gemma-4-e2b
+    # Install Python requirements and boot the live-reloading FastAPI server on startup
+    command: sh -c "pip install --no-cache-dir -r backend/requirements.txt && uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir backend"
+    restart: unless-stopped
+
+  frontend:
+    # Use standard lightweight Node container directly
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    volumes:
+      # Inject frontend directory source directly
+      - ./frontend:/app
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    # Install Node packages dynamically and launch Vite live server
+    command: sh -c "npm install && npm run dev"
+    restart: unless-stopped

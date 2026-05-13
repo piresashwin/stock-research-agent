@@ -1,0 +1,27 @@
+# Compiled Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+research_agent.db
+research_agent.db-journal
+
+# Environment variable overrides
+.env
+.env.local
+.env.*
+
+# Node dependencies & frontend output artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.eslintcache
+node_modules/
+dist/
+
+# Operating System temporary files
+.DS_Store
+Thumbs.db
